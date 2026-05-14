@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os_label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            os_label: Windows
+            artifact_glob: |
+              dist/StayAwake.exe
+              dist/StayAwake-Setup.exe
+          - os: macos-latest
+            os_label: macOS
+            artifact_glob: |
+              dist/StayAwake.dmg
+          - os: ubuntu-latest
+            os_label: Linux
+            artifact_glob: |
+              dist/StayAwake-x86_64.AppImage
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Linux GUI + AppImage libraries
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-tk \
+            libgirepository1.0-dev \
+            gir1.2-appindicator3-0.1 \
+            libcairo2-dev \
+            libfuse2 \
+            desktop-file-utils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # ---- Tools for packaging ----
+      - name: Verify Inno Setup (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          # GitHub windows-latest runners ship Inno Setup 6 pre-installed.
+          if command -v iscc >/dev/null 2>&1; then
+            iscc /? | head -5 || true
+          elif [ -x "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then
+            echo "Found ISCC at C:\\Program Files (x86)\\Inno Setup 6"
+            echo "C:\\Program Files (x86)\\Inno Setup 6" >> "$GITHUB_PATH"
+          else
+            echo "::warning::Inno Setup not found; installing via choco"
+            choco install innosetup -y --no-progress
+          fi
+
+      - name: Download appimagetool (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          curl -L -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /usr/local/bin/appimagetool
+
+      # ---- Build + package ----
+      - name: Build binary
+        run: python build.py --force
+
+      - name: Create installer / disk image
+        run: python build.py --package
+
+      - name: List dist/
+        shell: bash
+        run: ls -lh dist/
+
+      # ---- Upload ----
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: StayAwake-${{ matrix.os_label }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact_glob }}
+          draft: false
+          generate_release_notes: true

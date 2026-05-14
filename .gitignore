@@ -1,0 +1,20 @@
+# Build artifacts
+dist/
+build/
+*.spec
+.build_hash
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

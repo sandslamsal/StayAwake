@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=StayAwake
+GenericName=Keep computer awake
+Comment=Prevent your computer from sleeping. By SyncStruct.
+Exec=StayAwake
+Icon=StayAwake
+Categories=Utility;System;
+Terminal=false
+StartupNotify=false
+Keywords=awake;caffeine;sleep;idle;keep-alive;timesheet;
